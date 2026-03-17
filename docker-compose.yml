@@ -1,0 +1,13 @@
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./.config:/config
+      - ./custom_components:/config/custom_components:ro
+    environment:
+      - TZ=Europe/Rome
+    restart: unless-stopped
+    ports:
+      - '8123:8123'

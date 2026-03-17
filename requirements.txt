@@ -1,0 +1,5 @@
+open-data-bz-meteo==1.0.0a1
+pytest-cov>=7.0
+pytest>=7.0
+# requests-mock>=1.9.3
+# responses>=0.23.1
