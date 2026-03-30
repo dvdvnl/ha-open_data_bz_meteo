@@ -1,0 +1,25 @@
+{
+  "title": "OPENdata BZ Meteo",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Seleziona la lingua per il nome della stazione e le descrizioni dei sensori:",
+        "data": {
+          "api_language": "Lingua API"
+        }
+      },
+      "station": {
+        "title": "Seleziona stazione",
+        "data": {
+          "station_code": "Seleziona una stazione"
+        }
+      }
+    },
+    "error": {
+      "already_configured": "La stazione è già configurata.",
+      "cannot_connect": "Impossibile connettersi all'API OPENdata BZ Meteo in questo momento.",
+      "invalid_station": "Stazione selezionata non valida.",
+      "no_stations_available": "Nessuna stazione disponibile per la lingua selezionata."
+    }
+  }
+}

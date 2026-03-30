@@ -4,4 +4,4 @@ This integration provides weather station data provided by _Provincia autonoma d
 
 ## Dependencies
 
-This integration depends on the [_OPENdata BZ Meteo_ Python client](open-data-bz-meteo) to fetch station and sensor data from the OPENdata API provided by the Provincia autonoma di Bolzano.
+This integration depends on the [_OPENdata BZ Meteo_ Python client](https://github.com/dvdvnl/open_data_bz_meteo) to fetch station and sensor data from the OPENdata API provided by the Provincia autonoma di Bolzano.

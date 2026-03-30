@@ -1,0 +1,25 @@
+{
+  "title": "OPENdata BZ Meteo",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up OPENdata BZ Meteo",
+        "data": {
+          "api_language": "Select the language for the station name and sensor descriptions:"
+        }
+      },
+      "station": {
+        "title": "Choose station",
+        "data": {
+          "station_code": "Select station"
+        }
+      }
+    },
+    "error": {
+      "already_configured": "Station is already configured.",
+      "cannot_connect": "Unable to connect to OPENdata BZ Meteo API right now.",
+      "invalid_station": "Selected station is invalid.",
+      "no_stations_available": "No stations available for selected language."
+    }
+  }
+}
