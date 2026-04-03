@@ -1,7 +1,7 @@
 {
   "content_in_root": false,
   "country": "IT",
-  "homeassistant": "2025.4.0",
+  "homeassistant": "2025.1.4",
   "name": "OPENdata BZ - Meteo",
   "zip_release": false
 }

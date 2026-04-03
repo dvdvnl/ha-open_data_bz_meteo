@@ -1,4 +1,4 @@
-FROM dvdvnl/devcontainer:python-3.14
+FROM dvdvnl/devcontainer:python-3.12
 
 # Install necessary packages for Home Assistant and development
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /config
 
 # Install Python dependencies
-RUN pip install homeassistant==2026.3.4 open-data-bz-meteo==1.0.0a2 pytest-cov pytest
+RUN pip install homeassistant==2025.1.4 open-data-bz-meteo==1.0.0a2 pytest-cov>=7.0 pytest>=7.0
 
 # Keep the container running
 CMD ["sleep", "infinity"]

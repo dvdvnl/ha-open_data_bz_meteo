@@ -4,12 +4,11 @@ services:
       context: ..
       dockerfile: .devcontainer/Dockerfile
     hostname: ha_open_data_bz_meteo-devcontainer
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - ../:/config:cached
-      - ${HOME}/.gitconfig:/home/devcon/.gitconfig:ro
-      - ${HOME}/.ssh/${SSH_KEYFILE}:/home/devcon/.ssh/id_rsa:ro
     environment:
       - TZ=Europe/Rome
     restart: unless-stopped
     user: devcon
+    volumes:
+      - ../:/config:cached
+      - ${HOME}/.gitconfig:/home/devcon/.gitconfig:ro
+      - ${HOME}/.ssh/${SSH_KEYFILE}:/home/devcon/.ssh/id_rsa:ro

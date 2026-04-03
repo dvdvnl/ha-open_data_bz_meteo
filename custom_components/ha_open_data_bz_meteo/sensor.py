@@ -142,9 +142,9 @@ class OpenDataBZMeteoSensor(CoordinatorEntity, SensorEntity):
     @staticmethod
     def _get_state_class(sensor_type: str):
         """Return the Home Assistant state class for a given sensor type."""
-        # Wind direction should use measurement_angle (not generic measurement)
+        # Home Assistant 2025 removed MEASUREMENT_ANGLE; use no explicit state class for wind direction.
         if sensor_type == "WR":
-            return SensorStateClass.MEASUREMENT_ANGLE
+            return None
 
         # Other numeric sensors are generic measurements
         return SensorStateClass.MEASUREMENT
@@ -174,8 +174,9 @@ class OpenDataBZMeteoSensor(CoordinatorEntity, SensorEntity):
             return SensorDeviceClass.IRRADIANCE
 
         # Wind direction (WR)
+        # HA 2025 no longer exposes WIND_DIRECTION device class.
         if sensor_type == "WR":
-            return SensorDeviceClass.WIND_DIRECTION
+            return None
 
         # Precipitation (N)
         if sensor_type == "N":

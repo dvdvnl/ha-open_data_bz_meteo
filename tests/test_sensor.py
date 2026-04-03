@@ -43,7 +43,7 @@ def test_wind_direction_state_class_and_cardinal():
 
     sensor = OpenDataBZMeteoSensor(coordinator, config_entry, station_code, sensor_data)
 
-    assert sensor._attr_state_class == SensorStateClass.MEASUREMENT_ANGLE
+    assert sensor._attr_state_class is None
     assert sensor._attr_native_unit_of_measurement == UnitOfSpeed.METERS_PER_SECOND
     assert sensor.extra_state_attributes["cardinal_direction"] == "NW"
 
@@ -88,10 +88,7 @@ def test_device_and_state_class_mapping():
     from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
     from custom_components.ha_open_data_bz_meteo.sensor import OpenDataBZMeteoSensor
 
-    assert (
-        OpenDataBZMeteoSensor._get_state_class("WR")
-        == SensorStateClass.MEASUREMENT_ANGLE
-    )
+    assert OpenDataBZMeteoSensor._get_state_class("WR") is None
     assert OpenDataBZMeteoSensor._get_state_class("LT") == SensorStateClass.MEASUREMENT
 
     assert (
@@ -107,10 +104,7 @@ def test_device_and_state_class_mapping():
         == SensorDeviceClass.WIND_SPEED
     )
     assert OpenDataBZMeteoSensor._get_device_class("GS") == SensorDeviceClass.IRRADIANCE
-    assert (
-        OpenDataBZMeteoSensor._get_device_class("WR")
-        == SensorDeviceClass.WIND_DIRECTION
-    )
+    assert OpenDataBZMeteoSensor._get_device_class("WR") is None
     assert (
         OpenDataBZMeteoSensor._get_device_class("N") == SensorDeviceClass.PRECIPITATION
     )
