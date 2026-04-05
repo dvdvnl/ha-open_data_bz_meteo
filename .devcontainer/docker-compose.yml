@@ -6,14 +6,10 @@ services:
     hostname: ha_open_data_bz_meteo-devcontainer
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      # - ../custom_components:/config/custom_components:cached
-      # - ../tests:/config/tests:cached
       - ../:/config:cached
       - ${HOME}/.gitconfig:/home/devcon/.gitconfig:ro
-      - ${HOME}/.ssh/devcontainer:/home/devcon/.ssh/id_rsa:ro
-      - ${HOME}/.ssh/known_hosts:/home/devcon/.ssh/known_hosts:ro
+      - ${HOME}/.ssh/${SSH_KEYFILE}:/home/devcon/.ssh/id_rsa:ro
     environment:
       - TZ=Europe/Rome
     restart: unless-stopped
     user: devcon
-    # command: [ "sleep", "infinity" ]

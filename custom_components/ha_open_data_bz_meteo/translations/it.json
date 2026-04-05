@@ -21,5 +21,15 @@
       "invalid_station": "Stazione selezionata non valida.",
       "no_stations_available": "Nessuna stazione disponibile per la lingua selezionata."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Seleziona lingua",
+        "data": {
+          "api_language": "Lingua API"
+        }
+      }
+    }
   }
 }

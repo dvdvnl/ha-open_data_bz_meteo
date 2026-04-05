@@ -21,5 +21,15 @@
       "invalid_station": "Selected station is invalid.",
       "no_stations_available": "No stations available for selected language."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Select language",
+        "data": {
+          "api_language": "Select the language for the station name and sensor descriptions:"
+        }
+      }
+    }
   }
 }

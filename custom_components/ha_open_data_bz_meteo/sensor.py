@@ -14,7 +14,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     """Set up Open Data BZ Meteo sensors from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
@@ -61,9 +63,9 @@ class OpenDataBZMeteoSensor(CoordinatorEntity, SensorEntity):
         self._attr_state_class = self._get_state_class(sensor_data.type)
 
     @property
-    def suggested_object_id(self):
+    def suggested_object_id(self) -> str | None:
         """Suggest an object ID for the entity (affects initial entity_id)."""
-        return self.unique_id.lower()
+        return self.unique_id.lower() if self.unique_id else None
 
     @property
     def device_info(self):
@@ -74,7 +76,6 @@ class OpenDataBZMeteoSensor(CoordinatorEntity, SensorEntity):
 
         return {
             "identifiers": {(DOMAIN, self.station_code)},
-            "manufacturer": "OPENdata BZ Meteo",
             "model": station_data.station_code,
             "name": self._get_station_name(station_data),
         }
@@ -96,10 +97,7 @@ class OpenDataBZMeteoSensor(CoordinatorEntity, SensorEntity):
                 "de": sensor_data.description_deu,
                 "it": sensor_data.description_ita,
                 "lld": sensor_data.description_lld,
-            }.get(
-                self.config_entry.data.get("api_language", "de"),
-                sensor_data.description_deu,
-            )
+            }.get(self._api_language(), sensor_data.description_deu)
 
         return f"{station_name} {sensor_label}"
 
@@ -129,7 +127,7 @@ class OpenDataBZMeteoSensor(CoordinatorEntity, SensorEntity):
         """Return additional state attributes for the sensor entity."""
         attrs = {}
 
-        # provide cardinal direction for wind direction sensors
+        # Provide cardinal direction for wind direction sensors
         if self.sensor_type == "WR":
             value = self.native_value
             try:
@@ -234,9 +232,16 @@ class OpenDataBZMeteoSensor(CoordinatorEntity, SensorEntity):
 
     def _get_station_name(self, station_data) -> str:
         """Return the localized station name for the configured API language."""
-        lang = self.config_entry.data.get("api_language", "de")
+        lang = self._api_language()
         return {
             "de": station_data.name_deu,
             "it": station_data.name_ita,
             "lld": station_data.name_lld,
         }.get(lang, station_data.name_deu)
+
+    def _api_language(self) -> str:
+        """Return the configured API language, preferring options over data."""
+        options = getattr(self.config_entry, "options", {}) or {}
+        return options.get(
+            "api_language", self.config_entry.data.get("api_language", "de")
+        )

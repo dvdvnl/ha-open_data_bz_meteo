@@ -459,6 +459,48 @@ def test_config_flow_steps_and_invalid_station():
     assert result_success["data"]["configured_stations"] == ["A1"]
 
 
+def test_config_flow_skips_stations_already_in_other_entry():
+    import asyncio
+    from custom_components.ha_open_data_bz_meteo import config_flow
+
+    flow = config_flow.OpenDataBZMeteoConfigFlow()
+
+    async def async_add_executor_job(callable_, *args, **kwargs):
+        return callable_(*args, **kwargs)
+
+    flow.hass = SimpleNamespace(async_add_executor_job=async_add_executor_job)
+
+    class FakeClient:
+        def get_stations(self):
+            return [
+                SimpleNamespace(
+                    station_code="A1",
+                    name_deu="A deutsch",
+                    name_ita="A italiano",
+                    name_lld="A ladin",
+                    name_eng="A english",
+                ),
+                SimpleNamespace(
+                    station_code="A2",
+                    name_deu="B deutsch",
+                    name_ita="B italiano",
+                    name_lld="B ladin",
+                    name_eng="B english",
+                ),
+            ]
+
+    config_flow.Client = FakeClient
+
+    flow._async_current_entries = lambda: [
+        SimpleNamespace(data={"configured_stations": ["A1"]}),
+        SimpleNamespace(data={"configured_stations": ["A2"]}),
+    ]
+
+    result = asyncio.run(flow.async_step_station())
+    assert result["type"] == "abort"
+    assert result["reason"] == "no_stations_available"
+
+
 def test_init_async_setup_and_unload_entry():
 
     import asyncio
@@ -644,6 +686,89 @@ def test_config_flow_async_step_user_flow():
     result_no_stations = asyncio.run(flow.async_step_user({"api_language": "de"}))
     assert result_no_stations["type"] == "abort"
     assert result_no_stations["reason"] == "no_stations_available"
+
+
+def test_sensor_uses_options_language_over_data():
+    from custom_components.ha_open_data_bz_meteo.sensor import OpenDataBZMeteoSensor
+
+    station_code = "83200ms"
+    station = SimpleNamespace(
+        station_code=station_code,
+        name_deu="Station DE",
+        name_ita="Station IT",
+        name_lld="Station LLD",
+    )
+    sensor_data = SimpleNamespace(
+        type="LT",
+        unit="°C",
+        value="20",
+        description_deu="Temperatur",
+        description_ita="Temperatura",
+        description_lld="Temperatura",
+    )
+    coordinator = SimpleNamespace(
+        data={
+            station_code: {
+                "station": station,
+                "sensors": [sensor_data],
+            }
+        },
+        last_update_success=True,
+    )
+    config_entry = SimpleNamespace(
+        data={"api_language": "de"}, options={"api_language": "it"}
+    )
+
+    sensor = OpenDataBZMeteoSensor(coordinator, config_entry, station_code, sensor_data)
+
+    assert sensor.name.startswith("Station IT")
+    assert sensor.device_info["name"] == "Station IT"
+
+
+def test_options_flow_updates_language_and_refreshes_data():
+    import asyncio
+    from custom_components.ha_open_data_bz_meteo.config_flow import (
+        OpenDataBZMeteoOptionsFlow,
+    )
+    from custom_components.ha_open_data_bz_meteo.const import DOMAIN
+
+    entry = SimpleNamespace(
+        entry_id="entry_id",
+        data={"configured_stations": ["A1"], "api_language": "de"},
+        options={},
+    )
+
+    reloaded = False
+
+    async def async_reload(entry_id):
+        nonlocal reloaded
+        reloaded = True
+        return True
+
+    def async_update_entry(config_entry, options=None, data=None):
+        if data is not None:
+            setattr(config_entry, "data", data)
+        if options is not None:
+            setattr(config_entry, "options", options)
+        return True
+
+    hass = SimpleNamespace(
+        data={DOMAIN: {entry.entry_id: {"coordinator": SimpleNamespace()}}},
+        config_entries=SimpleNamespace(
+            async_update_entry=async_update_entry,
+            async_reload=async_reload,
+        ),
+    )
+
+    flow = OpenDataBZMeteoOptionsFlow(entry)
+    flow.hass = hass
+
+    result = asyncio.run(flow.async_step_init({"api_language": "it"}))
+
+    assert entry.options["api_language"] == "it"
+    assert entry.data["api_language"] == "it"
+    assert reloaded is True
+    assert result["type"] == "create_entry"
 
 
 def test_sensor_name_and_native_value_edge_cases():

@@ -38,9 +38,6 @@ class OpenDataBZMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     and creating the final `config_entries.ConfigEntry`.
     """
 
-    # TODO: kick?
-    VERSION = 1
-
     def __init__(self) -> None:
         """Initialize the config flow state.
 
@@ -78,12 +75,14 @@ class OpenDataBZMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         - Validates selection and creates the config entry.
         """
         # Start with no stations configured yet.
-        configured_stations = []
+        configured_stations: list[str] = []
 
-        # Detect an existing config entry and inherit configured stations from it.
-        existing_entry = next(iter(self._async_current_entries()), None)
-        if existing_entry is not None:
-            configured_stations = existing_entry.data.get("configured_stations", [])
+        # Detect existing config entries and inherit all configured stations from them.
+        for existing_entry in self._async_current_entries():
+            configured_stations.extend(
+                existing_entry.data.get("configured_stations", [])
+            )
+        configured_stations = list(dict.fromkeys(configured_stations))
 
         # Query station options from API, filtering out already configured ones.
         try:
@@ -118,6 +117,11 @@ class OpenDataBZMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "api_language": self.api_language,
             },
         )
+
+    @staticmethod
+    def async_get_options_flow(config_entry):
+        """Return the options flow for this config entry."""
+        return OpenDataBZMeteoOptionsFlow(config_entry)
 
     async def _async_fetch_station_options(
         self, api_language: str, configured_stations: list[str]
@@ -170,3 +174,39 @@ class OpenDataBZMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             station_code: f"{name} ({station_code})" for name, station_code in items
         }
         return options
+
+
+class OpenDataBZMeteoOptionsFlow(config_entries.OptionsFlow):
+    """Handle options flow for OPENdata BZ Meteo."""
+
+    def __init__(self, config_entry):
+        self._config_entry = config_entry
+
+    async def async_step_init(self, user_input=None):
+        """Manage the options flow."""
+        if user_input is None:
+            api_language = self._config_entry.options.get(
+                "api_language",
+                self._config_entry.data.get("api_language", "de"),
+            )
+            schema = vol.Schema(
+                {
+                    vol.Required("api_language", default=api_language): vol.In(
+                        LANGUAGE_OPTIONS
+                    )
+                }
+            )
+            return self.async_show_form(step_id="init", data_schema=schema)
+
+        api_language = user_input["api_language"]
+        options = {"api_language": api_language}
+        data = {**self._config_entry.data, "api_language": api_language}
+
+        self.hass.config_entries.async_update_entry(
+            self._config_entry,
+            options=options,
+            data=data,
+        )
+        await self.hass.config_entries.async_reload(self._config_entry.entry_id)
+
+        return self.async_create_entry(title="", data=options)

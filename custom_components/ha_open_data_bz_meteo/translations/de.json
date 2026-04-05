@@ -21,5 +21,15 @@
       "invalid_station": "Ausgewählte Station ist ungültig.",
       "no_stations_available": "Keine Stationen in der gewählten Sprache verfügbar."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sprache auswählen",
+        "data": {
+          "api_language": "Sprache für Name der Station und die Beschreibungen der Sensoren auswählen:"
+        }
+      }
+    }
   }
 }
