@@ -3,11 +3,11 @@
   "name": "OPENdata BZ - Meteo",
   "description": "Weather station data for South Tyrol, Italy, provided by the OPENdata API by the Autonomous Province of Bolzano. Provides sensors for temperature, humidity, wind, precipitation, and more.",
   "config_flow": true,
-  "version": "1.0.0a2",
+  "version": "1.0.0",
   "documentation": "https://github.com/dvdvnl/ha-open_data_bz_meteo",
   "issue_tracker": "https://github.com/dvdvnl/ha-open_data_bz_meteo/issues",
   "requirements": [
-    "open-data-bz-meteo==1.0.0a2"
+    "open-data-bz-meteo==1.0.0"
   ],
   "dependencies": [],
   "codeowners": [

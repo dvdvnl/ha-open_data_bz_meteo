@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /config
 
 # Install Python dependencies
-RUN pip install homeassistant==2026.3.4 open-data-bz-meteo==1.0.0a2 pytest-cov pytest
+RUN pip install homeassistant==2026.8.3 open-data-bz-meteo==1.0.0 pytest-cov pytest
 
 # Keep the container running
 CMD ["sleep", "infinity"]

@@ -11,3 +11,7 @@ This integration depends on the [_OPENdata BZ Meteo_ Python client](https://gith
 ### Devcontainer
 
 Provide the name of the SSH key file to the Docker devcontainer via `SSH_KEYFILE`.
+
+### Tests
+
+Run tests with `pytest --cov`.
