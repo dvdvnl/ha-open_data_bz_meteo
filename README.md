@@ -4,7 +4,7 @@ This integration provides weather station data provided by _Provincia autonoma d
 
 ## Installation
 
-Install as a custom repository, or copy `custom_components/ha_open_data_bz_meteo` into your Home Assistant `custom_components` folder, then restart Home Assistant.
+Via [HACS](https://hacs.xyz) or manually copy `custom_components/ha_open_data_bz_meteo` into your Home Assistant `custom_components` folder, then restart Home Assistant.
 
 ## Configuration
 
