@@ -1,5 +1,6 @@
-import pytest
 from types import SimpleNamespace
+
+import pytest
 
 
 def test_language_options_ui():
@@ -13,6 +14,7 @@ def test_wind_direction_state_class_and_cardinal():
 
     from homeassistant.components.sensor import SensorStateClass
     from homeassistant.const import UnitOfSpeed
+
     from custom_components.ha_open_data_bz_meteo.sensor import OpenDataBZMeteoSensor
 
     station_code = "83200ms"
@@ -86,6 +88,7 @@ def test_language_ldd_fallback_station_name():
 def test_device_and_state_class_mapping():
 
     from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+
     from custom_components.ha_open_data_bz_meteo.sensor import OpenDataBZMeteoSensor
 
     assert (
@@ -395,9 +398,13 @@ def test_async_setup_entry_adds_all_sensors():
 def test_config_flow_fetch_station_options_and_error():
 
     import asyncio
+
     from custom_components.ha_open_data_bz_meteo import config_flow
 
     class FakeClient:
+        def __init__(self, base_url=None):
+            self.base_url = base_url
+
         def get_stations(self):
             return [
                 SimpleNamespace(
@@ -426,6 +433,9 @@ def test_config_flow_fetch_station_options_and_error():
     assert options_skip == {}
 
     class FakeClientError:
+        def __init__(self, base_url=None):
+            self.base_url = base_url
+
         def get_stations(self):
             raise RuntimeError("fail")
 
@@ -437,6 +447,7 @@ def test_config_flow_fetch_station_options_and_error():
 def test_config_flow_steps_and_invalid_station():
 
     import asyncio
+
     from custom_components.ha_open_data_bz_meteo import config_flow
 
     flow = config_flow.OpenDataBZMeteoConfigFlow()
@@ -461,6 +472,7 @@ def test_config_flow_steps_and_invalid_station():
 
 def test_config_flow_skips_stations_already_in_other_entry():
     import asyncio
+
     from custom_components.ha_open_data_bz_meteo import config_flow
 
     flow = config_flow.OpenDataBZMeteoConfigFlow()
@@ -471,6 +483,9 @@ def test_config_flow_skips_stations_already_in_other_entry():
     flow.hass = SimpleNamespace(async_add_executor_job=async_add_executor_job)
 
     class FakeClient:
+        def __init__(self, base_url=None):
+            self.base_url = base_url
+
         def get_stations(self):
             return [
                 SimpleNamespace(
@@ -504,9 +519,13 @@ def test_config_flow_skips_stations_already_in_other_entry():
 def test_init_async_setup_and_unload_entry():
 
     import asyncio
+
     import custom_components.ha_open_data_bz_meteo as integration
 
     class FakeClient:
+        def __init__(self, base_url=None):
+            self.base_url = base_url
+
         def get_stations(self):
             return [SimpleNamespace(station_code="A1")]
 
@@ -563,7 +582,9 @@ def test_init_async_setup_and_unload_entry():
         config_entries=ConfigEntries(),
     )
 
-    entry = SimpleNamespace(entry_id="entry_id", data={"configured_stations": ["A1"]})
+    entry = SimpleNamespace(
+        entry_id="entry_id", options={}, data={"configured_stations": ["A1"]}
+    )
 
     result = asyncio.run(integration.async_setup_entry(hass, entry))
     assert result is True
@@ -582,9 +603,13 @@ def test_init_async_setup_and_unload_entry():
 def test_init_async_setup_entry_with_fallback_and_device_registry_remove():
 
     import asyncio
+
     import custom_components.ha_open_data_bz_meteo as integration
 
     class FakeClient:
+        def __init__(self, base_url=None):
+            self.base_url = base_url
+
         def get_stations(self):
             return []
 
@@ -653,7 +678,9 @@ def test_init_async_setup_entry_with_fallback_and_device_registry_remove():
         config_entries=ConfigEntries(),
     )
 
-    entry = SimpleNamespace(entry_id="entry_id", data={"configured_stations": ["A1"]})
+    entry = SimpleNamespace(
+        entry_id="entry_id", options={}, data={"configured_stations": ["A1"]}
+    )
 
     result = asyncio.run(integration.async_setup_entry(hass, entry))
     assert result is True
@@ -670,6 +697,7 @@ def test_init_async_setup_entry_with_fallback_and_device_registry_remove():
 def test_config_flow_async_step_user_flow():
 
     import asyncio
+
     from custom_components.ha_open_data_bz_meteo import config_flow
 
     flow = config_flow.OpenDataBZMeteoConfigFlow()
@@ -727,6 +755,7 @@ def test_sensor_uses_options_language_over_data():
 
 def test_options_flow_updates_language_and_refreshes_data():
     import asyncio
+
     from custom_components.ha_open_data_bz_meteo.config_flow import (
         OpenDataBZMeteoOptionsFlow,
     )
@@ -773,8 +802,9 @@ def test_options_flow_updates_language_and_refreshes_data():
 
 def test_sensor_name_and_native_value_edge_cases():
 
-    from custom_components.ha_open_data_bz_meteo.sensor import OpenDataBZMeteoSensor
     from homeassistant.const import UnitOfPressure
+
+    from custom_components.ha_open_data_bz_meteo.sensor import OpenDataBZMeteoSensor
 
     station_code = "83200ms"
     sensor_data = SimpleNamespace(
@@ -840,9 +870,13 @@ def test_sensor_name_and_native_value_edge_cases():
 def test_init_async_setup_entry_station_missing_logs_warning_and_entry_not_ready():
 
     import asyncio
+
     import custom_components.ha_open_data_bz_meteo as integration
 
     class FakeClientNoStation:
+        def __init__(self, base_url=None):
+            self.base_url = base_url
+
         def get_stations(self):
             return []
 
@@ -907,7 +941,9 @@ def test_init_async_setup_entry_station_missing_logs_warning_and_entry_not_ready
         bus=Bus(),
         config_entries=ConfigEntries(),
     )
-    entry = SimpleNamespace(entry_id="entry_id", data={"configured_stations": ["A1"]})
+    entry = SimpleNamespace(
+        entry_id="entry_id", options={}, data={"configured_stations": ["A1"]}
+    )
 
     result = asyncio.run(integration.async_setup_entry(hass, entry))
     assert result is True
@@ -964,6 +1000,7 @@ def test_init_async_setup_entry_station_missing_logs_warning_and_entry_not_ready
 def test_async_unload_entry_returns_false_if_platform_unload_fails():
 
     import asyncio
+
     import custom_components.ha_open_data_bz_meteo as integration
 
     class ConfigEntries:
@@ -974,7 +1011,7 @@ def test_async_unload_entry_returns_false_if_platform_unload_fails():
         data={"ha_open_data_bz_meteo": {"entry_id": {}}},
         config_entries=ConfigEntries(),
     )
-    entry = SimpleNamespace(entry_id="entry_id", data={})
+    entry = SimpleNamespace(entry_id="entry_id", options={}, data={})
 
     assert asyncio.run(integration.async_unload_entry(hass, entry)) is False
 
@@ -982,6 +1019,7 @@ def test_async_unload_entry_returns_false_if_platform_unload_fails():
 def test_async_unload_entry_keeps_domain_if_other_stations_exist():
 
     import asyncio
+
     import custom_components.ha_open_data_bz_meteo as integration
 
     class ConfigEntries:
@@ -997,7 +1035,7 @@ def test_async_unload_entry_keeps_domain_if_other_stations_exist():
         },
         config_entries=ConfigEntries(),
     )
-    entry = SimpleNamespace(entry_id="entry_id", data={})
+    entry = SimpleNamespace(entry_id="entry_id", options={}, data={})
 
     assert asyncio.run(integration.async_unload_entry(hass, entry)) is True
     assert "ha_open_data_bz_meteo" in hass.data
@@ -1006,6 +1044,7 @@ def test_async_unload_entry_keeps_domain_if_other_stations_exist():
 def test_sensor_unknown_type_device_class_and_unit_passthrough():
 
     from homeassistant.components.sensor import SensorStateClass
+
     from custom_components.ha_open_data_bz_meteo.sensor import OpenDataBZMeteoSensor
 
     station_code = "83200ms"
@@ -1042,9 +1081,13 @@ def test_sensor_unknown_type_device_class_and_unit_passthrough():
 def test_init_async_setup_entry_raises_config_entry_not_ready_on_api_failure():
 
     import asyncio
+
     import custom_components.ha_open_data_bz_meteo as integration
 
     class FakeClientError:
+        def __init__(self, base_url=None):
+            self.base_url = base_url
+
         def get_stations(self):
             raise RuntimeError("wild failure")
 
@@ -1095,7 +1138,9 @@ def test_init_async_setup_entry_raises_config_entry_not_ready_on_api_failure():
         bus=Bus(),
         config_entries=ConfigEntries(),
     )
-    entry = SimpleNamespace(entry_id="entry_id", data={"configured_stations": ["A1"]})
+    entry = SimpleNamespace(
+        entry_id="entry_id", options={}, data={"configured_stations": ["A1"]}
+    )
 
     with pytest.raises(integration.ConfigEntryNotReady):
         asyncio.run(integration.async_setup_entry(hass, entry))
@@ -1104,6 +1149,7 @@ def test_init_async_setup_entry_raises_config_entry_not_ready_on_api_failure():
 def test_config_flow_step_station_cannot_connect():
 
     import asyncio
+
     from custom_components.ha_open_data_bz_meteo import config_flow
 
     flow = config_flow.OpenDataBZMeteoConfigFlow()
@@ -1123,6 +1169,7 @@ def test_config_flow_step_station_cannot_connect():
 def test_config_flow_existing_entries_and_name_fallback():
 
     import asyncio
+
     from custom_components.ha_open_data_bz_meteo import config_flow
 
     flow = config_flow.OpenDataBZMeteoConfigFlow()
@@ -1145,7 +1192,14 @@ def test_config_flow_existing_entries_and_name_fallback():
         name_lld = None
         name_eng = "EngName"
 
-    config_flow.Client = type("C", (), {"get_stations": lambda self: [StationNoName()]})
+    config_flow.Client = type(
+        "C",
+        (),
+        {
+            "__init__": lambda self, base_url=None: None,
+            "get_stations": lambda self: [StationNoName()],
+        },
+    )
 
     async def async_add_executor_job2(callable_, *args, **kwargs):
         return callable_(*args, **kwargs)

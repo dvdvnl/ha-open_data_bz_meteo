@@ -5,7 +5,8 @@
       "user": {
         "title": "OPENdata BZ Meteo einrichten",
         "data": {
-          "api_language": "Sprache für Name der Station und die Beschreibungen der Sensoren auswählen:"
+          "api_language": "Sprache für Name der Station und die Beschreibungen der Sensoren auswählen:",
+          "api_url": "Basis-URL der API"
         }
       },
       "station": {
@@ -27,7 +28,8 @@
       "init": {
         "title": "Sprache auswählen",
         "data": {
-          "api_language": "Sprache für Name der Station und die Beschreibungen der Sensoren auswählen:"
+          "api_language": "Sprache für Name der Station und die Beschreibungen der Sensoren auswählen:",
+          "api_url": "Basis-URL der API"
         }
       }
     }

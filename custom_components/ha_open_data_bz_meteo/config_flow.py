@@ -14,7 +14,7 @@ from homeassistant import config_entries
 from homeassistant.exceptions import HomeAssistantError
 from open_data_bz_meteo import Client
 
-from .const import DOMAIN
+from .const import CONF_API_URL, DEFAULT_API_URL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ class OpenDataBZMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         Default API language is German ('de'), until overridden by the user.
         """
         self.api_language = "de"
+        self.api_url = DEFAULT_API_URL
 
     async def async_step_user(self, user_input=None):
         """Handle the initial user step of the config flow.
@@ -58,12 +59,14 @@ class OpenDataBZMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required("api_language", default="de"): vol.In(
                         LANGUAGE_OPTIONS
                     ),
+                    vol.Required(CONF_API_URL, default=DEFAULT_API_URL): str,
                 }
             )
             return self.async_show_form(step_id="user", data_schema=form_schema)
 
         # Save user-selected language and move to station selection step.
         self.api_language = user_input["api_language"]
+        self.api_url = user_input.get(CONF_API_URL, DEFAULT_API_URL).strip()
         return await self.async_step_station()
 
     async def async_step_station(self, user_input=None):
@@ -115,6 +118,7 @@ class OpenDataBZMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data={
                 "configured_stations": [station_code],
                 "api_language": self.api_language,
+                CONF_API_URL: self.api_url,
             },
         )
 
@@ -138,7 +142,7 @@ class OpenDataBZMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         Returns:
             A mapping of station_code to human-readable display string.
         """
-        client = Client()
+        client = Client(base_url=self.api_url)
 
         # Execute blocking I/O in a worker to keep Home Assistant responsive.
         try:
@@ -189,18 +193,28 @@ class OpenDataBZMeteoOptionsFlow(config_entries.OptionsFlow):
                 "api_language",
                 self._config_entry.data.get("api_language", "de"),
             )
+            api_url = self._config_entry.options.get(
+                CONF_API_URL,
+                self._config_entry.data.get(CONF_API_URL, DEFAULT_API_URL),
+            )
             schema = vol.Schema(
                 {
                     vol.Required("api_language", default=api_language): vol.In(
                         LANGUAGE_OPTIONS
-                    )
+                    ),
+                    vol.Required(CONF_API_URL, default=api_url): str,
                 }
             )
             return self.async_show_form(step_id="init", data_schema=schema)
 
         api_language = user_input["api_language"]
-        options = {"api_language": api_language}
-        data = {**self._config_entry.data, "api_language": api_language}
+        api_url = user_input.get(CONF_API_URL, DEFAULT_API_URL).strip()
+        options = {"api_language": api_language, CONF_API_URL: api_url}
+        data = {
+            **self._config_entry.data,
+            "api_language": api_language,
+            CONF_API_URL: api_url,
+        }
 
         self.hass.config_entries.async_update_entry(
             self._config_entry,

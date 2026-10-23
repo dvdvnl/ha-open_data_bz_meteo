@@ -11,13 +11,13 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import EVENT_DEVICE_REGISTRY_UPDATED
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import EVENT_DEVICE_REGISTRY_UPDATED
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-
-from .const import DOMAIN, PLATFORMS, SCAN_INTERVAL
 from open_data_bz_meteo import Client
+
+from .const import CONF_API_URL, DEFAULT_API_URL, DOMAIN, PLATFORMS, SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +33,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     Returns:
         True when setup is successful. Raises ConfigEntryNotReady on failure.
     """
-    client = Client()
+    api_url = entry.options.get(
+        CONF_API_URL, entry.data.get(CONF_API_URL, DEFAULT_API_URL)
+    )
+    client = Client(base_url=api_url)
 
     async def async_update_data() -> dict[str, dict]:
         """Fetch current station and sensor data from the API.
