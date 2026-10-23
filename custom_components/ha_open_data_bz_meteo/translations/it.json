@@ -8,12 +8,6 @@
           "api_language": "Lingua API",
           "api_url": "URL di base dell'API"
         }
-      },
-      "station": {
-        "title": "Seleziona stazione",
-        "data": {
-          "station_code": "Seleziona una stazione"
-        }
       }
     },
     "error": {
@@ -31,6 +25,26 @@
           "api_language": "Lingua API",
           "api_url": "URL di base dell'API"
         }
+      }
+    }
+  },
+  "config_subentries": {
+    "station": {
+      "initiate_flow": {
+        "user": "Aggiungi stazione"
+      },
+      "entry_type": "Stazione",
+      "step": {
+        "user": {
+          "title": "Aggiungi stazione",
+          "data": {
+            "station_code": "Seleziona stazione"
+          }
+        }
+      },
+      "abort": {
+        "cannot_connect": "Impossibile connettersi all'API OPENdata BZ Meteo in questo momento.",
+        "no_stations_available": "Nessun'altra stazione disponibile."
       }
     }
   }

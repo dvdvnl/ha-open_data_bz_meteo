@@ -1,8 +1,7 @@
 """Config flow for the OPENdata BZ Meteo custom component.
 
-This module defines the Home Assistant configuration flow used when the user
-adds or changes the integration through UI. It guides the user through language
-selection and station selection and handles connection errors.
+The config entry stores the API URL and the language. Weather stations are
+added to it as `station` subentries.
 """
 
 from __future__ import annotations
@@ -11,10 +10,19 @@ import logging
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from open_data_bz_meteo import Client
 
-from .const import CONF_API_URL, DEFAULT_API_URL, DOMAIN
+from .const import (
+    CONF_API_LANGUAGE,
+    CONF_API_URL,
+    CONF_STATION_CODE,
+    DEFAULT_API_URL,
+    DOMAIN,
+    SUBENTRY_TYPE_STATION,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,154 +38,147 @@ class CannotConnect(HomeAssistantError):
     """Exception raised when the config flow cannot reach the remote API."""
 
 
-class OpenDataBZMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for OPENdata BZ Meteo.
+async def async_fetch_station_options(
+    hass: HomeAssistant,
+    api_url: str,
+    api_language: str,
+    configured_stations: list[str],
+) -> dict[str, str]:
+    """Fetch the selectable stations from the API.
 
-    This class defines the Home Assistant UI flow states for configuring the
-    integration (user -> station), checking for already-configured entries,
-    and creating the final `config_entries.ConfigEntry`.
+    Excludes already configured stations and localizes the station names.
+
+    Raises:
+        CannotConnect: when the station list cannot be fetched.
+
+    Returns:
+        A mapping of station_code to human-readable display string.
     """
+    client = Client(base_url=api_url)
 
-    def __init__(self) -> None:
-        """Initialize the config flow state.
+    try:
+        stations = await hass.async_add_executor_job(client.get_stations)
+    except Exception as err:  # pylint: disable=broad-except
+        _LOGGER.error("Could not fetch stations: %s", err)
+        raise CannotConnect from err
 
-        Default API language is German ('de'), until overridden by the user.
-        """
-        self.api_language = "de"
-        self.api_url = DEFAULT_API_URL
+    items = []
+    for station in stations:
+        if station.station_code in configured_stations:
+            continue
+
+        name = {
+            "de": station.name_deu,
+            "it": station.name_ita,
+            "lld": station.name_lld,
+        }.get(api_language)
+        if not name:
+            name = station.name_eng or station.name_deu
+
+        items.append((name, station.station_code))
+
+    items.sort(key=lambda item: item[0])
+
+    return {station_code: f"{name} ({station_code})" for name, station_code in items}
+
+
+def _settings_schema(api_language: str, api_url: str) -> vol.Schema:
+    """Build the schema shared by the setup and options forms."""
+    return vol.Schema(
+        {
+            vol.Required(CONF_API_LANGUAGE, default=api_language): vol.In(
+                LANGUAGE_OPTIONS
+            ),
+            vol.Required(CONF_API_URL, default=api_url): str,
+        }
+    )
+
+
+class OpenDataBZMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle the config flow for OPENdata BZ Meteo."""
+
+    VERSION = 2
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial user step of the config flow.
+        """Ask for the API URL and language and create the (single) entry."""
+        errors: dict[str, str] = {}
 
-        If no input is provided, show a form to let the user select `api_language`.
-        Once input is provided, store language choice and continue to station step.
-        """
-        # When user opens the integration setup, show the language selection form.
-        if user_input is None:
-            form_schema = vol.Schema(
-                {
-                    vol.Required("api_language", default="de"): vol.In(
-                        LANGUAGE_OPTIONS
-                    ),
-                    vol.Required(CONF_API_URL, default=DEFAULT_API_URL): str,
-                }
-            )
-            return self.async_show_form(step_id="user", data_schema=form_schema)
+        if user_input is not None:
+            api_url = user_input[CONF_API_URL].strip()
+            api_language = user_input[CONF_API_LANGUAGE]
+            try:
+                await async_fetch_station_options(self.hass, api_url, api_language, [])
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_create_entry(
+                    title="OPENdata BZ Meteo",
+                    data={CONF_API_LANGUAGE: api_language, CONF_API_URL: api_url},
+                )
 
-        # Save user-selected language and move to station selection step.
-        self.api_language = user_input["api_language"]
-        self.api_url = user_input.get(CONF_API_URL, DEFAULT_API_URL).strip()
-        return await self.async_step_station()
-
-    async def async_step_station(self, user_input=None):
-        """Handle the station selection step of the config flow.
-
-        - Fetches currently configured stations from existing entry (if any).
-        - Queries the API for available station options.
-        - Presents a form for station selection.
-        - Validates selection and creates the config entry.
-        """
-        # Start with no stations configured yet.
-        configured_stations: list[str] = []
-
-        # Detect existing config entries and inherit all configured stations from them.
-        for existing_entry in self._async_current_entries():
-            configured_stations.extend(
-                existing_entry.data.get("configured_stations", [])
-            )
-        configured_stations = list(dict.fromkeys(configured_stations))
-
-        # Query station options from API, filtering out already configured ones.
-        try:
-            options = await self._async_fetch_station_options(
-                self.api_language, configured_stations
-            )
-        except CannotConnect:
-            # Show connection error on the station selection step.
-            return self.async_show_form(
-                step_id="station",
-                data_schema=vol.Schema({}),
-                errors={"base": "cannot_connect"},
-            )
-
-        # If no new stations are available, abort the setup flow.
-        if not options:
-            return self.async_abort(reason="no_stations_available")
-
-        # If user hasn't picked a station yet, present the selection form.
-        if user_input is None:
-            schema = vol.Schema({vol.Required("station_code"): vol.In(options)})
-            return self.async_show_form(step_id="station", data_schema=schema)
-
-        # User submitted a station code; validate it is in the provided options.
-        station_code = user_input["station_code"]
-
-        # Create the config entry using selected station and language preference.
-        return self.async_create_entry(
-            title="OPENdata BZ Meteo",
-            data={
-                "configured_stations": [station_code],
-                "api_language": self.api_language,
-                CONF_API_URL: self.api_url,
-            },
+        defaults = user_input or {}
+        return self.async_show_form(
+            step_id="user",
+            data_schema=_settings_schema(
+                defaults.get(CONF_API_LANGUAGE, "de"),
+                defaults.get(CONF_API_URL, DEFAULT_API_URL),
+            ),
+            errors=errors,
         )
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: config_entries.ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Return the subentry types supported by this integration."""
+        return {SUBENTRY_TYPE_STATION: StationSubentryFlowHandler}
 
     @staticmethod
     def async_get_options_flow(config_entry):
         """Return the options flow for this config entry."""
         return OpenDataBZMeteoOptionsFlow(config_entry)
 
-    async def _async_fetch_station_options(
-        self, api_language: str, configured_stations: list[str]
-    ) -> dict[str, str]:
-        """Fetch station options from remote API and local config.
 
-        Contacts the open_data_bz_meteo client(s) in a worker thread to avoid
-        blocking the event loop. Excludes already configured stations and
-        localizes the station names according to selected API language.
+class StationSubentryFlowHandler(ConfigSubentryFlow):
+    """Add a weather station as subentry."""
 
-        Raises:
-            CannotConnect: when station list cannot be fetched.
+    async def async_step_user(self, user_input=None) -> SubentryFlowResult:
+        """Let the user pick a station that is not configured yet."""
+        entry = self._get_entry()
+        configured = [
+            subentry.data[CONF_STATION_CODE] for subentry in entry.subentries.values()
+        ]
 
-        Returns:
-            A mapping of station_code to human-readable display string.
-        """
-        client = Client(base_url=self.api_url)
-
-        # Execute blocking I/O in a worker to keep Home Assistant responsive.
         try:
-            stations = await self.hass.async_add_executor_job(client.get_stations)
-        except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.error("Could not fetch stations: %s", err)
-            # Bubble up a config flow-specific error for UI feedback.
-            raise CannotConnect from err
+            options = await async_fetch_station_options(
+                self.hass,
+                entry.options.get(CONF_API_URL, entry.data.get(CONF_API_URL)),
+                entry.options.get(
+                    CONF_API_LANGUAGE, entry.data.get(CONF_API_LANGUAGE, "de")
+                ),
+                configured,
+            )
+        except CannotConnect:
+            return self.async_abort(reason="cannot_connect")
 
-        items = []
-        for station in stations:
-            # Skip already configured station(s) to avoid duplicates.
-            if station.station_code in configured_stations:
-                continue
+        if not options:
+            return self.async_abort(reason="no_stations_available")
 
-            # Choose localized name based on selected API language.
-            name = {
-                "de": station.name_deu,
-                "it": station.name_ita,
-                "lld": station.name_lld,
-            }.get(api_language)
-            if not name:
-                # Fall back to English or German if selected language missing.
-                name = station.name_eng or station.name_deu
+        if user_input is None:
+            return self.async_show_form(
+                step_id="user",
+                data_schema=vol.Schema(
+                    {vol.Required(CONF_STATION_CODE): vol.In(options)}
+                ),
+            )
 
-            items.append((name, station.station_code))
-
-        # Sort alphabetically by localized station name.
-        items.sort(key=lambda item: item[0])
-
-        # Build config flow choices in Home Assistant expected format.
-        options = {
-            station_code: f"{name} ({station_code})" for name, station_code in items
-        }
-        return options
+        station_code = user_input[CONF_STATION_CODE]
+        return self.async_create_entry(
+            title=options[station_code],
+            data={CONF_STATION_CODE: station_code},
+            unique_id=station_code,
+        )
 
 
 class OpenDataBZMeteoOptionsFlow(config_entries.OptionsFlow):
@@ -188,39 +189,24 @@ class OpenDataBZMeteoOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Manage the options flow."""
+        entry = self._config_entry
+
         if user_input is None:
-            api_language = self._config_entry.options.get(
-                "api_language",
-                self._config_entry.data.get("api_language", "de"),
-            )
-            api_url = self._config_entry.options.get(
-                CONF_API_URL,
-                self._config_entry.data.get(CONF_API_URL, DEFAULT_API_URL),
-            )
-            schema = vol.Schema(
-                {
-                    vol.Required("api_language", default=api_language): vol.In(
-                        LANGUAGE_OPTIONS
+            return self.async_show_form(
+                step_id="init",
+                data_schema=_settings_schema(
+                    entry.options.get(
+                        CONF_API_LANGUAGE, entry.data.get(CONF_API_LANGUAGE, "de")
                     ),
-                    vol.Required(CONF_API_URL, default=api_url): str,
-                }
+                    entry.options.get(
+                        CONF_API_URL, entry.data.get(CONF_API_URL, DEFAULT_API_URL)
+                    ),
+                ),
             )
-            return self.async_show_form(step_id="init", data_schema=schema)
 
-        api_language = user_input["api_language"]
-        api_url = user_input.get(CONF_API_URL, DEFAULT_API_URL).strip()
-        options = {"api_language": api_language, CONF_API_URL: api_url}
-        data = {
-            **self._config_entry.data,
-            "api_language": api_language,
-            CONF_API_URL: api_url,
+        options = {
+            CONF_API_LANGUAGE: user_input[CONF_API_LANGUAGE],
+            CONF_API_URL: user_input[CONF_API_URL].strip(),
         }
-
-        self.hass.config_entries.async_update_entry(
-            self._config_entry,
-            options=options,
-            data=data,
-        )
-        await self.hass.config_entries.async_reload(self._config_entry.entry_id)
-
+        # Saving the options triggers the update listener, which reloads the entry.
         return self.async_create_entry(title="", data=options)

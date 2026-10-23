@@ -8,26 +8,34 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfPressure, UnitOfSpeed, UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONF_STATION_CODE, DOMAIN
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Open Data BZ Meteo sensors from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
-    entities = []
-    for station_code, station_data in coordinator.data.items():
-        for sensor_data in station_data["sensors"]:
-            entities.append(
-                OpenDataBZMeteoSensor(coordinator, entry, station_code, sensor_data)
-            )
+    for subentry in entry.subentries.values():
+        station_code = subentry.data[CONF_STATION_CODE]
+        station_data = coordinator.data.get(station_code)
+        if station_data is None:
+            continue
 
-    async_add_entities(entities, True)
+        async_add_entities(
+            [
+                OpenDataBZMeteoSensor(coordinator, entry, station_code, sensor_data)
+                for sensor_data in station_data["sensors"]
+            ],
+            True,
+            config_subentry_id=subentry.subentry_id,
+        )
 
 
 class OpenDataBZMeteoSensor(CoordinatorEntity, SensorEntity):

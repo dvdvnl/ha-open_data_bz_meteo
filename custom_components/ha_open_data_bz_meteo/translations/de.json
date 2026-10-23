@@ -8,12 +8,6 @@
           "api_language": "Sprache für Name der Station und die Beschreibungen der Sensoren auswählen:",
           "api_url": "Basis-URL der API"
         }
-      },
-      "station": {
-        "title": "Station wählen",
-        "data": {
-          "station_code": "Station auswählen"
-        }
       }
     },
     "error": {
@@ -31,6 +25,26 @@
           "api_language": "Sprache für Name der Station und die Beschreibungen der Sensoren auswählen:",
           "api_url": "Basis-URL der API"
         }
+      }
+    }
+  },
+  "config_subentries": {
+    "station": {
+      "initiate_flow": {
+        "user": "Station hinzufügen"
+      },
+      "entry_type": "Station",
+      "step": {
+        "user": {
+          "title": "Station hinzufügen",
+          "data": {
+            "station_code": "Station auswählen"
+          }
+        }
+      },
+      "abort": {
+        "cannot_connect": "Verbindung zur OPENdata BZ Meteo API zurzeit nicht möglich.",
+        "no_stations_available": "Keine weiteren Stationen verfügbar."
       }
     }
   }

@@ -360,362 +360,6 @@ def test_device_info_name_language_fallback():
     assert sensor_none.device_info is None
 
 
-def test_async_setup_entry_adds_all_sensors():
-
-    from custom_components.ha_open_data_bz_meteo.sensor import async_setup_entry
-
-    station_code = "83200ms"
-    sensor_data = SimpleNamespace(
-        type="LT",
-        unit="°C",
-        value="20",
-        description_deu="Temperatur",
-        description_ita="Temperatura",
-        description_lld="Temperatura",
-    )
-    coordinator = SimpleNamespace(
-        data={station_code: {"station": SimpleNamespace(), "sensors": [sensor_data]}},
-        last_update_success=True,
-    )
-    hass = SimpleNamespace(
-        data={"ha_open_data_bz_meteo": {"entry_id": {"coordinator": coordinator}}}
-    )
-    entry = SimpleNamespace(entry_id="entry_id")
-
-    added = []
-
-    def fake_add_entities(entities, update=False):
-        added.extend(entities)
-        assert update is True
-
-    # ensure no exception and one entity added
-    import asyncio
-
-    asyncio.run(async_setup_entry(hass, entry, fake_add_entities))
-    assert len(added) == 1
-
-
-def test_config_flow_fetch_station_options_and_error():
-
-    import asyncio
-
-    from custom_components.ha_open_data_bz_meteo import config_flow
-
-    class FakeClient:
-        def __init__(self, base_url=None):
-            self.base_url = base_url
-
-        def get_stations(self):
-            return [
-                SimpleNamespace(
-                    station_code="A1",
-                    name_deu="A deutsch",
-                    name_ita="A italiano",
-                    name_lld="A ladin",
-                    name_eng="A english",
-                )
-            ]
-
-    config_flow.Client = FakeClient
-
-    async def _async_add_executor_job(callable_, *args, **kwargs):
-        return callable_(*args, **kwargs)
-
-    flow = config_flow.OpenDataBZMeteoConfigFlow()
-    flow.hass = SimpleNamespace(async_add_executor_job=_async_add_executor_job)
-    flow._async_current_entries = lambda: []
-
-    options = asyncio.run(flow._async_fetch_station_options("de", []))
-    assert options == {"A1": "A deutsch (A1)"}
-
-    # configured station excluded
-    options_skip = asyncio.run(flow._async_fetch_station_options("de", ["A1"]))
-    assert options_skip == {}
-
-    class FakeClientError:
-        def __init__(self, base_url=None):
-            self.base_url = base_url
-
-        def get_stations(self):
-            raise RuntimeError("fail")
-
-    config_flow.Client = FakeClientError
-    with pytest.raises(config_flow.CannotConnect):
-        asyncio.run(flow._async_fetch_station_options("de", []))
-
-
-def test_config_flow_steps_and_invalid_station():
-
-    import asyncio
-
-    from custom_components.ha_open_data_bz_meteo import config_flow
-
-    flow = config_flow.OpenDataBZMeteoConfigFlow()
-    flow.hass = SimpleNamespace(async_add_executor_job=lambda f, *a, **k: f(*a, **k))
-    flow._async_current_entries = lambda: []
-
-    async def dummy_fetch(api_language, configured_stations):
-        return {"A1": "A1 (A1)"}
-
-    flow._async_fetch_station_options = dummy_fetch
-
-    result_form = asyncio.run(flow.async_step_station())
-    assert result_form["type"] == "form"
-
-    # Invalid station_code rejection is handled by voluptuous (vol.In) at the
-    # schema level before the handler is reached, so no guard is needed here.
-
-    result_success = asyncio.run(flow.async_step_station({"station_code": "A1"}))
-    assert result_success["type"] == "create_entry"
-    assert result_success["data"]["configured_stations"] == ["A1"]
-
-
-def test_config_flow_skips_stations_already_in_other_entry():
-    import asyncio
-
-    from custom_components.ha_open_data_bz_meteo import config_flow
-
-    flow = config_flow.OpenDataBZMeteoConfigFlow()
-
-    async def async_add_executor_job(callable_, *args, **kwargs):
-        return callable_(*args, **kwargs)
-
-    flow.hass = SimpleNamespace(async_add_executor_job=async_add_executor_job)
-
-    class FakeClient:
-        def __init__(self, base_url=None):
-            self.base_url = base_url
-
-        def get_stations(self):
-            return [
-                SimpleNamespace(
-                    station_code="A1",
-                    name_deu="A deutsch",
-                    name_ita="A italiano",
-                    name_lld="A ladin",
-                    name_eng="A english",
-                ),
-                SimpleNamespace(
-                    station_code="A2",
-                    name_deu="B deutsch",
-                    name_ita="B italiano",
-                    name_lld="B ladin",
-                    name_eng="B english",
-                ),
-            ]
-
-    config_flow.Client = FakeClient
-
-    flow._async_current_entries = lambda: [
-        SimpleNamespace(data={"configured_stations": ["A1"]}),
-        SimpleNamespace(data={"configured_stations": ["A2"]}),
-    ]
-
-    result = asyncio.run(flow.async_step_station())
-    assert result["type"] == "abort"
-    assert result["reason"] == "no_stations_available"
-
-
-def test_init_async_setup_and_unload_entry():
-
-    import asyncio
-
-    import custom_components.ha_open_data_bz_meteo as integration
-
-    class FakeClient:
-        def __init__(self, base_url=None):
-            self.base_url = base_url
-
-        def get_stations(self):
-            return [SimpleNamespace(station_code="A1")]
-
-        def get_station(self, station_code):
-            return SimpleNamespace(station_code=station_code)
-
-        def get_sensors(self, station):
-            return [SimpleNamespace(type="LT", unit="°C", value="10")]
-
-    integration.Client = FakeClient
-
-    class DummyCoordinator:
-        def __init__(
-            self,
-            hass,
-            logger,
-            *,
-            name,
-            update_method,
-            update_interval,
-            config_entry=None,
-        ):
-            self.data = {}
-            self._update_method = update_method
-
-        async def async_config_entry_first_refresh(self):
-            return True
-
-    integration.DataUpdateCoordinator = DummyCoordinator
-
-    async def async_add_executor_job(callable_, *args, **kwargs):
-        return callable_(*args, **kwargs)
-
-    class ConfigEntries:
-        async def async_forward_entry_setups(self, entry, platforms):
-            return True
-
-        def async_update_entry(self, entry, data):
-            entry.data = data
-
-    class Bus:
-        def __init__(self):
-            self.callback = None
-
-        def async_listen(self, event, callback):
-            self.callback = callback
-            return lambda: None
-
-    empty_data = {}
-    hass = SimpleNamespace(
-        data=empty_data,
-        async_add_executor_job=async_add_executor_job,
-        bus=Bus(),
-        config_entries=ConfigEntries(),
-    )
-
-    entry = SimpleNamespace(
-        entry_id="entry_id", options={}, data={"configured_stations": ["A1"]}
-    )
-
-    result = asyncio.run(integration.async_setup_entry(hass, entry))
-    assert result is True
-    assert hass.data["ha_open_data_bz_meteo"]["entry_id"]["coordinator"] is not None
-
-    # Unload path
-    async def fake_unload(entry_arg, platforms):
-        return True
-
-    hass.config_entries.async_unload_platforms = fake_unload
-    retval = asyncio.run(integration.async_unload_entry(hass, entry))
-    assert retval is True
-    assert "ha_open_data_bz_meteo" not in hass.data
-
-
-def test_init_async_setup_entry_with_fallback_and_device_registry_remove():
-
-    import asyncio
-
-    import custom_components.ha_open_data_bz_meteo as integration
-
-    class FakeClient:
-        def __init__(self, base_url=None):
-            self.base_url = base_url
-
-        def get_stations(self):
-            return []
-
-        def get_station(self, station_code):
-            if station_code == "A1":
-                return SimpleNamespace(station_code="A1")
-            return None
-
-        def get_sensors(self, station):
-            return []
-
-    integration.Client = FakeClient
-
-    class DummyCoordinator:
-        def __init__(
-            self,
-            hass,
-            logger,
-            *,
-            name,
-            update_method,
-            update_interval,
-            config_entry=None,
-        ):
-            self.data = {}
-            self._update_method = update_method
-
-        async def async_config_entry_first_refresh(self):
-            self.data = await self._update_method()
-            return True
-
-    integration.DataUpdateCoordinator = DummyCoordinator
-
-    async def async_add_executor_job(callable_, *args, **kwargs):
-        return callable_(*args, **kwargs)
-
-    class ConfigEntries:
-        async def async_forward_entry_setups(self, entry, platforms):
-            return True
-
-        def async_update_entry(self, entry, data):
-            entry.data = data
-
-    class Bus:
-        def __init__(self):
-            self.callback = None
-
-        def async_listen(self, event, callback):
-            self.callback = callback
-            return lambda: None
-
-    class DeviceEntry:
-        identifiers = {("ha_open_data_bz_meteo", "A1")}
-
-    class DeviceRegistry:
-        def async_get(self, device_id):
-            return DeviceEntry() if device_id == "device1" else None
-
-    integration.dr.async_get = lambda hass: DeviceRegistry()
-
-    empty_data = {}
-    hass = SimpleNamespace(
-        data=empty_data,
-        async_add_executor_job=async_add_executor_job,
-        bus=Bus(),
-        config_entries=ConfigEntries(),
-    )
-
-    entry = SimpleNamespace(
-        entry_id="entry_id", options={}, data={"configured_stations": ["A1"]}
-    )
-
-    result = asyncio.run(integration.async_setup_entry(hass, entry))
-    assert result is True
-
-    assert hass.bus.callback is not None
-
-    # Trigger device registry updated remove event path
-    hass.bus.callback(
-        SimpleNamespace(data={"action": "remove", "device_id": "device1"})
-    )
-    assert entry.data["configured_stations"] == []
-
-
-def test_config_flow_async_step_user_flow():
-
-    import asyncio
-
-    from custom_components.ha_open_data_bz_meteo import config_flow
-
-    flow = config_flow.OpenDataBZMeteoConfigFlow()
-    flow.hass = SimpleNamespace(async_add_executor_job=lambda f, *a, **k: f(*a, **k))
-    flow._async_current_entries = lambda: []
-
-    result_user_form = asyncio.run(flow.async_step_user())
-    assert result_user_form["type"] == "form"
-
-    async def fake_fetch(api_language, configured_stations):
-        return {}
-
-    flow._async_fetch_station_options = fake_fetch
-    result_no_stations = asyncio.run(flow.async_step_user({"api_language": "de"}))
-    assert result_no_stations["type"] == "abort"
-    assert result_no_stations["reason"] == "no_stations_available"
-
-
 def test_sensor_uses_options_language_over_data():
     from custom_components.ha_open_data_bz_meteo.sensor import OpenDataBZMeteoSensor
 
@@ -751,53 +395,6 @@ def test_sensor_uses_options_language_over_data():
 
     assert sensor.name.startswith("Station IT")
     assert sensor.device_info["name"] == "Station IT"
-
-
-def test_options_flow_updates_language_and_refreshes_data():
-    import asyncio
-
-    from custom_components.ha_open_data_bz_meteo.config_flow import (
-        OpenDataBZMeteoOptionsFlow,
-    )
-    from custom_components.ha_open_data_bz_meteo.const import DOMAIN
-
-    entry = SimpleNamespace(
-        entry_id="entry_id",
-        data={"configured_stations": ["A1"], "api_language": "de"},
-        options={},
-    )
-
-    reloaded = False
-
-    async def async_reload(entry_id):
-        nonlocal reloaded
-        reloaded = True
-        return True
-
-    def async_update_entry(config_entry, options=None, data=None):
-        if data is not None:
-            setattr(config_entry, "data", data)
-        if options is not None:
-            setattr(config_entry, "options", options)
-        return True
-
-    hass = SimpleNamespace(
-        data={DOMAIN: {entry.entry_id: {"coordinator": SimpleNamespace()}}},
-        config_entries=SimpleNamespace(
-            async_update_entry=async_update_entry,
-            async_reload=async_reload,
-        ),
-    )
-
-    flow = OpenDataBZMeteoOptionsFlow(entry)
-    flow.hass = hass
-
-    result = asyncio.run(flow.async_step_init({"api_language": "it"}))
-
-    assert entry.options["api_language"] == "it"
-    assert entry.data["api_language"] == "it"
-    assert reloaded is True
-    assert result["type"] == "create_entry"
 
 
 def test_sensor_name_and_native_value_edge_cases():
@@ -865,136 +462,6 @@ def test_sensor_name_and_native_value_edge_cases():
 
     # native_value None when sensor missing
     assert sensor3.native_value is None
-
-
-def test_init_async_setup_entry_station_missing_logs_warning_and_entry_not_ready():
-
-    import asyncio
-
-    import custom_components.ha_open_data_bz_meteo as integration
-
-    class FakeClientNoStation:
-        def __init__(self, base_url=None):
-            self.base_url = base_url
-
-        def get_stations(self):
-            return []
-
-        def get_station(self, station_code):
-            return None
-
-        def get_sensors(self, station):
-            return []
-
-    integration.Client = FakeClientNoStation
-
-    class DummyCoordinatorNoStation:
-        def __init__(
-            self,
-            hass,
-            logger,
-            *,
-            name,
-            update_method,
-            update_interval,
-            config_entry=None,
-        ):
-            self.data = {}
-            self._update_method = update_method
-
-        async def async_config_entry_first_refresh(self):
-            self.data = await self._update_method()
-            return True
-
-    integration.DataUpdateCoordinator = DummyCoordinatorNoStation
-
-    async def async_add_executor_job(callable_, *args, **kwargs):
-        return callable_(*args, **kwargs)
-
-    class ConfigEntries:
-        async def async_forward_entry_setups(self, entry, platforms):
-            return True
-
-        def async_update_entry(self, entry, data):
-            entry.data = data
-
-    class Bus:
-        def __init__(self):
-            self.callback = None
-
-        def async_listen(self, event, callback):
-            self.callback = callback
-            return lambda: None
-
-    class DeviceEntry:
-        identifiers = {("ha_open_data_bz_meteo", "A1")}
-
-    class DeviceRegistry:
-        def async_get(self, device_id):
-            return DeviceEntry() if device_id == "device1" else None
-
-    integration.dr.async_get = lambda hass: DeviceRegistry()
-
-    hass = SimpleNamespace(
-        data={},
-        async_add_executor_job=async_add_executor_job,
-        bus=Bus(),
-        config_entries=ConfigEntries(),
-    )
-    entry = SimpleNamespace(
-        entry_id="entry_id", options={}, data={"configured_stations": ["A1"]}
-    )
-
-    result = asyncio.run(integration.async_setup_entry(hass, entry))
-    assert result is True
-
-    # callback action not remove
-    hass.bus.callback(
-        SimpleNamespace(data={"action": "create", "device_id": "device1"})
-    )
-
-    # callback device_id missing
-    hass.bus.callback(SimpleNamespace(data={"action": "remove"}))
-
-    # callback device not found in registry
-    hass.bus.callback(
-        SimpleNamespace(data={"action": "remove", "device_id": "device2"})
-    )
-
-    # callback identifiers domain mismatch
-    class BadDeviceEntry:
-        identifiers = {("other_domain", "A1")}
-
-    integration.dr.async_get = lambda hass: SimpleNamespace(
-        async_get=lambda device_id: BadDeviceEntry()
-    )
-    hass.bus.callback(
-        SimpleNamespace(data={"action": "remove", "device_id": "device1"})
-    )
-
-    # callback station_code None
-    class NoStationCodeDeviceEntry:
-        identifiers = {("ha_open_data_bz_meteo", None)}
-
-    integration.dr.async_get = lambda hass: SimpleNamespace(
-        async_get=lambda device_id: NoStationCodeDeviceEntry()
-    )
-    hass.bus.callback(
-        SimpleNamespace(data={"action": "remove", "device_id": "device1"})
-    )
-
-    # callback station not in configured_stations
-    entry.data = {"configured_stations": []}
-
-    class OtherStationEntry:
-        identifiers = {("ha_open_data_bz_meteo", "A1")}
-
-    integration.dr.async_get = lambda hass: SimpleNamespace(
-        async_get=lambda device_id: OtherStationEntry()
-    )
-    hass.bus.callback(
-        SimpleNamespace(data={"action": "remove", "device_id": "device1"})
-    )
 
 
 def test_async_unload_entry_returns_false_if_platform_unload_fails():
@@ -1146,65 +613,422 @@ def test_init_async_setup_entry_raises_config_entry_not_ready_on_api_failure():
         asyncio.run(integration.async_setup_entry(hass, entry))
 
 
-def test_config_flow_step_station_cannot_connect():
+# --- Single config entry with station subentries ---------------------------
 
-    import asyncio
+from types import MappingProxyType  # noqa: E402
 
-    from custom_components.ha_open_data_bz_meteo import config_flow
-
-    flow = config_flow.OpenDataBZMeteoConfigFlow()
-    flow.hass = SimpleNamespace(async_add_executor_job=lambda f, *a, **k: f(*a, **k))
-    flow._async_current_entries = lambda: []
-
-    async def fetch_error(api_language, configured_stations):
-        raise config_flow.CannotConnect
-
-    flow._async_fetch_station_options = fetch_error
-
-    result = asyncio.run(flow.async_step_station())
-    assert result["type"] == "form"
-    assert result["errors"] == {"base": "cannot_connect"}
+from homeassistant.config_entries import ConfigSubentry  # noqa: E402
 
 
-def test_config_flow_existing_entries_and_name_fallback():
-
-    import asyncio
-
-    from custom_components.ha_open_data_bz_meteo import config_flow
-
-    flow = config_flow.OpenDataBZMeteoConfigFlow()
-    flow.hass = SimpleNamespace(async_add_executor_job=lambda f, *a, **k: f(*a, **k))
-    flow._async_current_entries = lambda: [
-        SimpleNamespace(data={"configured_stations": ["A1"]})
-    ]
-
-    async def fake_fetch(api_language, configured_stations):
-        return {"A2": "A2 (A2)"}
-
-    flow._async_fetch_station_options = fake_fetch
-    result = asyncio.run(flow.async_step_station())
-    assert result["type"] == "form"
-
-    class StationNoName:
-        station_code = "A2"
-        name_deu = None
-        name_ita = None
-        name_lld = None
-        name_eng = "EngName"
-
-    config_flow.Client = type(
-        "C",
-        (),
-        {
-            "__init__": lambda self, base_url=None: None,
-            "get_stations": lambda self: [StationNoName()],
-        },
+def _subentry(code):
+    return ConfigSubentry(
+        data=MappingProxyType({"station_code": code}),
+        subentry_type="station",
+        title=code,
+        unique_id=code,
     )
 
-    async def async_add_executor_job2(callable_, *args, **kwargs):
-        return callable_(*args, **kwargs)
 
-    flow2 = config_flow.OpenDataBZMeteoConfigFlow()
-    flow2.hass = SimpleNamespace(async_add_executor_job=async_add_executor_job2)
-    options = asyncio.run(flow2._async_fetch_station_options("de", []))
-    assert options == {"A2": "EngName (A2)"}
+def _entry(codes, data=None, options=None):
+    subentries = {s.subentry_id: s for s in map(_subentry, codes)}
+    return SimpleNamespace(
+        entry_id="entry_id",
+        data=data or {"api_language": "de", "api_url": "https://example.test/v1"},
+        options=options or {},
+        subentries=subentries,
+    )
+
+
+def _station(code, name=None):
+    return SimpleNamespace(
+        station_code=code,
+        name_deu=name,
+        name_ita=name,
+        name_lld=name,
+        name_eng=f"{code} eng",
+    )
+
+
+async def _run_in_executor(callable_, *args, **kwargs):
+    return callable_(*args, **kwargs)
+
+
+def _fake_client(stations, record=None, fail=False):
+    class FakeClient:
+        def __init__(self, base_url=None):
+            if record is not None:
+                record.append(base_url)
+
+        def get_stations(self):
+            if fail:
+                raise RuntimeError("fail")
+            return stations
+
+        def get_station(self, station_code):
+            return next((s for s in stations if s.station_code == station_code), None)
+
+        def get_sensors(self, station):
+            return [SimpleNamespace(type="LT", unit="°C", value="10")]
+
+    return FakeClient
+
+
+def test_sensor_platform_adds_entities_per_subentry():
+    import asyncio
+
+    from custom_components.ha_open_data_bz_meteo.sensor import async_setup_entry
+
+    sensor_data = SimpleNamespace(
+        type="LT",
+        unit="°C",
+        value="20",
+        description_deu="T",
+        description_ita="T",
+        description_lld="T",
+    )
+    coordinator = SimpleNamespace(
+        data={"A1": {"station": SimpleNamespace(), "sensors": [sensor_data]}},
+        last_update_success=True,
+    )
+    entry = _entry(["A1", "MISSING"])
+    hass = SimpleNamespace(
+        data={"ha_open_data_bz_meteo": {"entry_id": {"coordinator": coordinator}}}
+    )
+
+    added = []
+
+    def fake_add_entities(entities, update=False, *, config_subentry_id=None):
+        assert update is True
+        added.append((len(entities), config_subentry_id))
+
+    asyncio.run(async_setup_entry(hass, entry, fake_add_entities))
+
+    a1_id = next(
+        s.subentry_id for s in entry.subentries.values() if s.unique_id == "A1"
+    )
+    assert added == [(1, a1_id)]
+
+
+def test_fetch_station_options_and_errors():
+    import asyncio
+
+    from custom_components.ha_open_data_bz_meteo import config_flow
+
+    calls = []
+    hass = SimpleNamespace(async_add_executor_job=_run_in_executor)
+    stations = [_station("B2", "Bravo"), _station("A1", "Alpha"), _station("C3")]
+    config_flow.Client = _fake_client(stations, calls)
+
+    options = asyncio.run(
+        config_flow.async_fetch_station_options(hass, "https://x/v1", "de", ["B2"])
+    )
+    assert options == {"A1": "Alpha (A1)", "C3": "C3 eng (C3)"}
+    assert calls == ["https://x/v1"]
+
+    config_flow.Client = _fake_client([], fail=True)
+    with pytest.raises(config_flow.CannotConnect):
+        asyncio.run(config_flow.async_fetch_station_options(hass, "u", "de", []))
+
+
+def test_config_flow_user_step_creates_entry_or_shows_error():
+    import asyncio
+
+    from custom_components.ha_open_data_bz_meteo import config_flow
+
+    flow = config_flow.OpenDataBZMeteoConfigFlow()
+    flow.hass = SimpleNamespace(async_add_executor_job=_run_in_executor)
+
+    form = asyncio.run(flow.async_step_user())
+    assert form["type"] == "form"
+
+    user_input = {"api_language": "it", "api_url": " https://x/v1 "}
+
+    config_flow.Client = _fake_client([], fail=True)
+    failed = asyncio.run(flow.async_step_user(user_input))
+    assert failed["type"] == "form"
+    assert failed["errors"] == {"base": "cannot_connect"}
+
+    config_flow.Client = _fake_client([_station("A1", "Alpha")])
+    created = asyncio.run(flow.async_step_user(user_input))
+    assert created["type"] == "create_entry"
+    assert created["data"] == {"api_language": "it", "api_url": "https://x/v1"}
+    assert flow.VERSION == 2
+
+
+def test_station_subentry_flow():
+    import asyncio
+
+    from custom_components.ha_open_data_bz_meteo import config_flow
+
+    entry = _entry(["A1"])
+    flow = config_flow.StationSubentryFlowHandler()
+    flow.hass = SimpleNamespace(async_add_executor_job=_run_in_executor)
+    flow._get_entry = lambda: entry
+    flow.context = {"source": "user"}
+    flow.handler = ("entry_id", "station")
+
+    calls = []
+    config_flow.Client = _fake_client(
+        [_station("A1", "Alpha"), _station("B2", "Bravo")], calls
+    )
+
+    form = asyncio.run(flow.async_step_user())
+    assert form["type"] == "form"
+    assert list(form["data_schema"].schema["station_code"].container) == ["B2"]
+    assert calls == ["https://example.test/v1"]
+
+    created = asyncio.run(flow.async_step_user({"station_code": "B2"}))
+    assert created["type"] == "create_entry"
+    assert created["data"] == {"station_code": "B2"}
+    assert created["unique_id"] == "B2"
+    assert created["title"] == "Bravo (B2)"
+
+    config_flow.Client = _fake_client([_station("A1", "Alpha")])
+    assert asyncio.run(flow.async_step_user())["reason"] == "no_stations_available"
+
+    config_flow.Client = _fake_client([], fail=True)
+    assert asyncio.run(flow.async_step_user())["reason"] == "cannot_connect"
+
+
+def test_subentry_types_registered():
+    from custom_components.ha_open_data_bz_meteo import config_flow
+
+    types = config_flow.OpenDataBZMeteoConfigFlow.async_get_supported_subentry_types(
+        _entry([])
+    )
+    assert types == {"station": config_flow.StationSubentryFlowHandler}
+
+
+def test_options_flow_saves_language_and_url():
+    import asyncio
+
+    from custom_components.ha_open_data_bz_meteo.config_flow import (
+        OpenDataBZMeteoOptionsFlow,
+    )
+
+    entry = _entry(["A1"])
+    flow = OpenDataBZMeteoOptionsFlow(entry)
+
+    form = asyncio.run(flow.async_step_init())
+    assert form["type"] == "form"
+
+    result = asyncio.run(
+        flow.async_step_init({"api_language": "it", "api_url": " https://y/v1 "})
+    )
+    assert result["type"] == "create_entry"
+    assert result["data"] == {"api_language": "it", "api_url": "https://y/v1"}
+
+
+def _setup_integration(monkeypatch, stations, record=None, fail=False):
+    import custom_components.ha_open_data_bz_meteo as integration
+
+    monkeypatch.setattr(integration, "Client", _fake_client(stations, record, fail))
+
+    class DummyCoordinator:
+        def __init__(self, hass, logger, *, update_method, **kwargs):
+            self.data = {}
+            self._update_method = update_method
+
+        async def async_config_entry_first_refresh(self):
+            self.data = await self._update_method()
+
+    monkeypatch.setattr(integration, "DataUpdateCoordinator", DummyCoordinator)
+
+    class ConfigEntries:
+        async def async_forward_entry_setups(self, entry, platforms):
+            return True
+
+        async def async_unload_platforms(self, entry, platforms):
+            return True
+
+        def async_update_subentry(self, entry, subentry, *, title):
+            object.__setattr__(subentry, "title", title)
+
+    hass = SimpleNamespace(
+        data={},
+        async_add_executor_job=_run_in_executor,
+        config_entries=ConfigEntries(),
+    )
+    return integration, hass
+
+
+def test_setup_and_unload_entry(monkeypatch):
+    import asyncio
+
+    calls = []
+    integration, hass = _setup_integration(monkeypatch, [_station("A1")], calls)
+    entry = _entry(["A1"])
+    listeners = []
+    entry.add_update_listener = lambda cb: cb
+    entry.async_on_unload = listeners.append
+
+    assert asyncio.run(integration.async_setup_entry(hass, entry)) is True
+    assert calls == ["https://example.test/v1"]
+    coordinator = hass.data["ha_open_data_bz_meteo"]["entry_id"]["coordinator"]
+    assert list(coordinator.data) == ["A1"]
+    assert listeners == [integration._async_update_listener]
+
+    assert asyncio.run(integration.async_unload_entry(hass, entry)) is True
+    assert "ha_open_data_bz_meteo" not in hass.data
+
+
+def test_setup_options_override_url_and_station_fallback(monkeypatch):
+    import asyncio
+
+    calls = []
+    integration, hass = _setup_integration(monkeypatch, [], calls)
+    entry = _entry(["A1"], options={"api_url": "https://opt/v1"})
+    entry.add_update_listener = lambda cb: cb
+    entry.async_on_unload = lambda cb: None
+
+    # Station absent from the list and from get_station: skipped with warning.
+    asyncio.run(integration.async_setup_entry(hass, entry))
+    assert calls == ["https://opt/v1"]
+    coordinator = hass.data["ha_open_data_bz_meteo"]["entry_id"]["coordinator"]
+    assert coordinator.data == {}
+
+
+def test_setup_raises_not_ready_on_api_failure(monkeypatch):
+    import asyncio
+
+    integration, hass = _setup_integration(monkeypatch, [], fail=True)
+    entry = _entry(["A1"])
+
+    with pytest.raises(integration.ConfigEntryNotReady):
+        asyncio.run(integration.async_setup_entry(hass, entry))
+
+
+def test_update_listener_reloads_entry():
+    import asyncio
+
+    import custom_components.ha_open_data_bz_meteo as integration
+
+    reloaded = []
+
+    async def async_reload(entry_id):
+        reloaded.append(entry_id)
+
+    hass = SimpleNamespace(config_entries=SimpleNamespace(async_reload=async_reload))
+    asyncio.run(integration._async_update_listener(hass, _entry([])))
+    assert reloaded == ["entry_id"]
+
+
+def test_migration_merges_station_entries_into_subentries():
+    import asyncio
+    import tempfile
+
+    from homeassistant import config_entries as ce
+    from homeassistant import loader
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers import area_registry as ar
+    from homeassistant.helpers import category_registry as cr
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+    from homeassistant.helpers import floor_registry as fr
+    from homeassistant.helpers import issue_registry as ir
+    from homeassistant.helpers import label_registry as lr
+
+    import custom_components.ha_open_data_bz_meteo as integration
+
+    domain = "ha_open_data_bz_meteo"
+
+    async def scenario():
+        config_dir = tempfile.mkdtemp()
+        hass = HomeAssistant(config_dir)
+        hass.config.config_dir = config_dir
+        hass.config_entries = ce.ConfigEntries(hass, {})
+        loader.async_setup(hass)
+        registries = (ar, fr, lr, cr, dr, er, ir)
+        for registry in registries:
+            if hasattr(registry, "async_setup"):
+                registry.async_setup(hass)
+        for registry in registries:
+            await registry.async_load(hass)
+
+        def legacy_entry(code, language):
+            entry = ConfigEntry(
+                data={"configured_stations": [code], "api_language": language},
+                discovery_keys={},
+                domain=domain,
+                minor_version=1,
+                options={},
+                source="user",
+                subentries_data=None,
+                title="OPENdata BZ Meteo",
+                unique_id=None,
+                version=1,
+            )
+            hass.config_entries._entries[entry.entry_id] = entry
+            device = dr.async_get(hass).async_get_or_create(
+                config_entry_id=entry.entry_id,
+                identifiers={(domain, code)},
+                name=code,
+            )
+            for sensor in ("LT", "LD.RED"):
+                er.async_get(hass).async_get_or_create(
+                    "sensor",
+                    domain,
+                    f"{code}_{sensor}",
+                    config_entry=entry,
+                    device_id=device.id,
+                )
+            return entry
+
+        legacy_entry("A1", "it")
+        legacy_entry("B2", "de")
+        await integration.async_setup(hass, {})
+        # Running again must be a no-op.
+        await integration.async_setup(hass, {})
+        return hass
+
+    hass = asyncio.run(scenario())
+
+    (entry,) = hass.config_entries.async_entries(domain)
+    assert entry.version == 2
+    assert entry.data["api_language"] == "it"
+    assert entry.data["api_url"].startswith("https://")
+    by_code = {s.data["station_code"]: s.subentry_id for s in entry.subentries.values()}
+    assert set(by_code) == {"A1", "B2"}
+
+    entities = er.async_get(hass).entities.values()
+    assert {e.unique_id for e in entities} == {
+        "A1_LT",
+        "A1_LD.RED",
+        "B2_LT",
+        "B2_LD.RED",
+    }
+    for e in entities:
+        assert e.config_entry_id == entry.entry_id
+        assert e.config_subentry_id == by_code[e.unique_id.split("_")[0]]
+    for d in dr.async_get(hass).devices.values():
+        assert d.config_entry_id == entry.entry_id
+        assert d.config_subentry_id == by_code[d.name]
+
+
+def test_subentry_titles_follow_language(monkeypatch):
+    import asyncio
+
+    station = SimpleNamespace(
+        station_code="A1",
+        name_deu="Alpha DE",
+        name_ita="Alpha IT",
+        name_lld=None,
+        name_eng="Alpha EN",
+    )
+    integration, hass = _setup_integration(monkeypatch, [station])
+    entry = _entry(["A1"])
+    entry.add_update_listener = lambda cb: cb
+    entry.async_on_unload = lambda cb: None
+    titles = lambda: [s.title for s in entry.subentries.values()]  # noqa: E731
+
+    asyncio.run(integration.async_setup_entry(hass, entry))
+    assert titles() == ["Alpha DE (A1)"]
+
+    entry.options = {"api_language": "it"}
+    asyncio.run(integration.async_setup_entry(hass, entry))
+    assert titles() == ["Alpha IT (A1)"]
+
+    entry.options = {"api_language": "lld"}
+    asyncio.run(integration.async_setup_entry(hass, entry))
+    assert titles() == ["Alpha EN (A1)"]
