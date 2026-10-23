@@ -6,7 +6,7 @@
         "title": "Seleziona la lingua per il nome della stazione e le descrizioni dei sensori:",
         "data": {
           "api_language": "Lingua API",
-          "api_url": "URL di base dell'API"
+          "api_url": "URL di base dell'API:"
         }
       }
     },
@@ -23,7 +23,7 @@
         "title": "Seleziona lingua",
         "data": {
           "api_language": "Lingua API",
-          "api_url": "URL di base dell'API"
+          "api_url": "URL di base dell'API:"
         }
       }
     }
@@ -38,7 +38,7 @@
         "user": {
           "title": "Aggiungi stazione",
           "data": {
-            "station_code": "Seleziona stazione"
+            "station_code": "Seleziona stazione:"
           }
         }
       },

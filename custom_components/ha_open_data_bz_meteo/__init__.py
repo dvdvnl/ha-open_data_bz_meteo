@@ -55,7 +55,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def _async_migrate_legacy_entries(hass: HomeAssistant) -> None:
-    """Turn one-entry-per-station (version 1) into one entry with subentries.
+    """Turn one-entry-per-station (version >= 1.1.0) into one entry with subentries.
 
     The first legacy entry becomes the parent and keeps its URL and language.
     Every station becomes a subentry; devices and entities are moved to it

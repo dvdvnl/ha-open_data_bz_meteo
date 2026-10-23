@@ -6,7 +6,16 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfPressure, UnitOfSpeed, UnitOfTemperature
+from homeassistant.const import (
+    DEGREE,
+    UnitOfIrradiance,
+    UnitOfPrecipitationDepth,
+    UnitOfPressure,
+    UnitOfRatio,
+    UnitOfSpeed,
+    UnitOfTemperature,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -62,9 +71,33 @@ class OpenDataBZMeteoSensor(CoordinatorEntity, SensorEntity):
         elif native_unit == "m/s":
             native_unit = UnitOfSpeed.METERS_PER_SECOND
 
+        # Speed (km/h)
+        elif native_unit == "km/h":
+            native_unit = UnitOfSpeed.KILOMETERS_PER_HOUR
+
         # Pressure (hPa)
         elif native_unit == "hPa":
             native_unit = UnitOfPressure.HPA
+
+        # Precipitation depth (mm)
+        elif native_unit == "mm":
+            native_unit = UnitOfPrecipitationDepth.MILLIMETERS
+
+        # Irradiance (W/m²)
+        elif native_unit == "W/m²":
+            native_unit = UnitOfIrradiance.WATTS_PER_SQUARE_METER
+
+        # Ratio
+        elif native_unit == "%":
+            native_unit = UnitOfRatio.PERCENTAGE
+
+        # Time (s)
+        elif native_unit == "s":
+            native_unit = UnitOfTime.SECONDS
+
+        # Degrees
+        elif native_unit == "°":
+            native_unit = DEGREE
 
         self._attr_device_class = self._get_device_class(sensor_data.type)
         self._attr_native_unit_of_measurement = native_unit
